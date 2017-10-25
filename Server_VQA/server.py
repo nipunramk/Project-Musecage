@@ -17,9 +17,6 @@ from sklearn.externals import joblib
 from keras import backend as K
 K.set_image_data_format('channels_first')
 
-import seaborn
-import librosa
-
 # constants
 # GPU_ID = 3
 # RESNET_MEAN_PATH = "../00_data_preprocess/ResNet_mean.binaryproto"
@@ -49,7 +46,6 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # vqa_net = None
 feature_cache = {}
 image_features = None
-last_file_type = None
 # vqa_data_provider = LoadVQADataProvider(VDICT_PATH, ADICT_PATH, batchsize=1, \
     # mode='test', data_shape=EXTRACT_LAYER_SIZE)
 
@@ -108,9 +104,6 @@ def make_rev_adict(adict):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
 
-def allowed_music_format(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1] in MUSIC_EXTENSIONS
-
 def softmax(arr):
     e = np.exp(arr)
     dist = e / np.sum(e)
@@ -122,7 +115,7 @@ def downsample_image(img):
     return img
 
 def get_image_model(CNN_weights_file_name):
-    ''' Takes the CNN weights file, and returns the VGG model update
+    ''' Takes the CNN weights file, and returns the VGG model update 
     with the weights. Requires the file VGG.py inside models/CNN '''
     from models.CNN.VGG import VGG_16
     image_model = VGG_16(CNN_weights_file_name)
@@ -135,7 +128,7 @@ def get_image_model(CNN_weights_file_name):
     return image_model
 
 def get_image_features(image_file_name, CNN_weights_file_name):
-    ''' Runs the given image_file to VGG 16 model and returns the
+    ''' Runs the given image_file to VGG 16 model and returns the 
     weights (filters) as a 1, 4096 dimension vector '''
     image_features = np.zeros((1, 4096))
     # Magic_Number = 4096  > Comes from last layer of VGG Model
@@ -154,11 +147,11 @@ def get_image_features(image_file_name, CNN_weights_file_name):
 
     im = im.transpose((2,0,1)) # convert the image to RGBA
 
-
+    
     # this axis dimension is required becuase VGG was trained on a dimension
     # of 1, 3, 224, 224 (first axis is for the batch size
     # even though we are using only one image, we have to keep the dimensions consistent
-    im = np.expand_dims(im, axis=0)
+    im = np.expand_dims(im, axis=0) 
 
     image_features[0,:] = get_image_model(CNN_weights_file_name).predict(im)[0]
     return image_features
@@ -203,7 +196,7 @@ def get_question_features(question):
 #     upsample0 = resize(att_map, (img_h, img_w), order=3) # bicubic interpolation
 #     upsample0 = upsample0 / upsample0.max()
 
-#     # create rgb-alpha
+#     # create rgb-alpha 
 #     rgba0 = np.zeros((img_h, img_w, img_c + 1))
 #     rgba0[..., 0:img_c] = img
 #     rgba0[..., 3] = upsample0
@@ -221,13 +214,12 @@ def index():
 
 @app.route('/api/upload_image', methods=['POST'])
 def upload_image():
-    global image_features, last_file_type
+    global image_features
     file = request.files['file']
     if not file:
         return jsonify({'error': 'No file was uploaded.'})
     if allowed_file(file.filename):
         start = time()
-        last_file_type = 'image'
         file_hash = hashlib.md5(file.read()).hexdigest()
         if file_hash in feature_cache:
             json = {'img_id': file_hash, 'time': time() - start}
@@ -241,77 +233,40 @@ def upload_image():
         feature_cache[file_hash] = image_features
         json = {'img_id': file_hash, 'time': time() - start}
         return jsonify(json)
-    elif allowed_music_format(file.filename):
-        start = time()
-        last_file_type = 'music'
-        file_hash = hashlib.md5(file.read()).hexdigest()
-        if file_hash in feature_cache:
-            json = json = {'img_id': file_hash, 'time': time() - start}
-            return jsonify(json)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], file_hash + '.jpg')
-        file.seek(0)
-        file.save(save_path)
-
-        y, sr = librosa.load(save_path)
-        onset_env = librosa.onset.onset_strength(y, sr=sr)
-        tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
-        feature_cache[file_hash] = {'tempo':tempo}
-        json = {'img_id': file_hash, 'time': time() - start}
-        return jsonify(json)
     else:
         return jsonify({'error': 'Please upload a JPG or PNG.'})
 
 @app.route('/api/upload_question', methods=['POST'])
 def upload_question():
-    if last_file_type == 'image':
-        img_hash = request.form['img_id']
-        if img_hash not in feature_cache:
-            return jsonify({'error': 'Unknown image ID. Try uploading the image again.'})
-        start = time()
-        img_feature = feature_cache[img_hash]
-        question = request.form['question']
-        # img_ques_hash = hashlib.md5(img_hash + question).hexdigest()
-        question_features = get_question_features(question)
-        vqa_model = get_VQA_model(VQA_weights_file_name)
-        y_output = vqa_model.predict([question_features, image_features])
-        y_sort_index = np.argsort(y_output)
+    img_hash = request.form['img_id']
+    if img_hash not in feature_cache:
+        return jsonify({'error': 'Unknown image ID. Try uploading the image again.'})
+    start = time()
+    img_feature = feature_cache[img_hash]
+    question = request.form['question']
+    # img_ques_hash = hashlib.md5(img_hash + question).hexdigest()
+    question_features = get_question_features(question)
+    vqa_model = get_VQA_model(VQA_weights_file_name)
+    y_output = vqa_model.predict([question_features, image_features])
+    y_sort_index = np.argsort(y_output)
+    
+    top_answers = []
+    top_scores = []
+    labelencoder = joblib.load(label_encoder_file_name)
+    for label in reversed(y_sort_index[0,-5:]):
+        output = str(round(y_output[0,label]*100,2)).zfill(5), "% ", labelencoder.inverse_transform(label)
+        top_answers.append(output[2])
+        top_scores.append(float(output[0]) / 100)
+    
 
-        top_answers = []
-        top_scores = []
-        labelencoder = joblib.load(label_encoder_file_name)
-        for label in reversed(y_sort_index[0,-5:]):
-            output = str(round(y_output[0,label]*100,2)).zfill(5), "% ", labelencoder.inverse_transform(label)
-            top_answers.append(output[2])
-            top_scores.append(float(output[0]) / 100)
 
+    json = {'answer': top_answers[0],
+        'answers': top_answers,
+        'scores': top_scores,
+        'time': time() - start}
+    print(json)
+    return jsonify(json)
 
-
-        json = {'answer': top_answers[0],
-            'answers': top_answers,
-            'scores': top_scores,
-            'time': time() - start}
-        print(json)
-        return jsonify(json)
-    elif last_file_type == 'music':
-        music_hash = request.form['img_id']
-        if music_hash not in feature_cache:
-            return jsonify({'error': 'Unknown music ID. Try uploading the music file again.'})
-        start = time()
-        music_feature = feature_cache[music_hash]
-
-        question = request.form['question']
-        if 'tempo' in question:
-            tempo = music_feature['tempo'][0]
-            json = {'answer': 'Tempo',
-                'answers': ['Tempo'],
-                'scores': [tempo],
-                'time': time() - start}
-            print(json)
-            return jsonify(json)
-        else:
-            return jsonify({'error': 'Unknown Question. Try asking a different question.'})
-    else:
-        return jsonify({'error': 'Unknown file. Try uploading the file again.'})
 # @app.route('/viz/<filename>')
 # def get_visualization(filename):
 #     return send_from_directory(VIZ_FOLDER, filename)
