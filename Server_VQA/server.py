@@ -23,6 +23,8 @@ import librosa
 import scipy.io.wavfile
 import pickle
 
+import numpy
+
 
 # constants
 # GPU_ID = 3
@@ -261,9 +263,67 @@ def upload_image():
         tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
         feature_cache[file_hash] = {'tempo':tempo}
         json = {'img_id': file_hash, 'time': time() - start}
+
+        trans(save_path)
+
         return jsonify(json)
     else:
         return jsonify({'error': 'Please upload a JPG or PNG.'})
+
+
+def trans(filename):
+
+    x, sr = librosa.load(filename)
+
+    onset_samples = librosa.onset.onset_detect(x, 
+                                               sr=sr, 
+                                               units='samples',
+                                               hop_length=100,
+                                               backtrack=False,
+                                               pre_max=5,
+                                               post_max=5,
+                                               pre_avg=50,
+                                               post_avg=50,
+                                               delta=0.0001,
+                                               wait=0)
+    onset_boundaries = numpy.concatenate([[0], onset_samples, [len(x)]])
+    onset_times = librosa.samples_to_time(onset_boundaries, sr=sr)
+
+    y = numpy.concatenate([
+    estimate_pitch_and_generate_sine(x, onset_boundaries, i, sr=sr)
+    for i in range(len(onset_boundaries)-1)
+	])
+	
+    librosa.output.write_wav('test.wav', y, sr)
+	
+    print("DONE")
+
+def estimate_pitch(segment, sr, fmin=50.0, fmax=2000.0):
+    
+    # Compute autocorrelation of input segment.
+    r = librosa.autocorrelate(segment)
+    
+    # Define lower and upper limits for the autocorrelation argmax.
+    i_min = sr/fmax
+    i_max = sr/fmin
+    r[:int(i_min)] = 0
+    r[int(i_max):] = 0
+    
+    # Find the location of the maximum autocorrelation.
+    i = r.argmax()
+    f0 = float(sr)/i
+    return f0
+
+def generate_sine(f0, sr, n_duration):
+    n = numpy.arange(n_duration)
+    return 0.2*numpy.sin(2*numpy.pi*f0*n/float(sr))
+
+def estimate_pitch_and_generate_sine(x, onset_samples, i, sr):
+    n0 = onset_samples[i]
+    n1 = onset_samples[i+1]
+    f0 = estimate_pitch(x[n0:n1], sr)
+    return generate_sine(f0, sr, n1-n0)
+
 
 @app.route('/api/upload_question', methods=['POST'])
 def upload_question():
@@ -333,7 +393,6 @@ def upload_question():
                 'time': time() - start}
             print(json)
             return jsonify(json)
-
 
         else:
             return jsonify({'error': 'Unknown Question. Try asking a different question.'})
