@@ -15,10 +15,14 @@ from keras.models import model_from_json
 from keras.optimizers import SGD
 from sklearn.externals import joblib
 from keras import backend as K
+from python_speech_features import mfcc
 K.set_image_data_format('channels_first')
 
 import seaborn
 import librosa
+import scipy.io.wavfile
+import pickle
+
 
 # constants
 # GPU_ID = 3
@@ -248,7 +252,7 @@ def upload_image():
         if file_hash in feature_cache:
             json = json = {'img_id': file_hash, 'time': time() - start}
             return jsonify(json)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], file_hash + '.jpg')
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], file_hash + '.wav')
         file.seek(0)
         file.save(save_path)
 
@@ -302,12 +306,35 @@ def upload_question():
         question = request.form['question']
         if 'tempo' in question:
             tempo = music_feature['tempo'][0]
+            print(type(tempo))
             json = {'answer': 'Tempo',
                 'answers': ['Tempo'],
                 'scores': [tempo],
                 'time': time() - start}
             print(json)
             return jsonify(json)
+        elif 'genre' in question:
+            model = pickle.load(open('finalized_model_lda.sav', 'rb'))
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], music_hash + '.wav')
+            sample_rate, X = scipy.io.wavfile.read(save_path)
+            mfcc_features = mfcc(X, sample_rate)
+            X = mfcc_features.flatten()[:30000]
+            prediction = model.predict(X)[0]
+            if prediction == 0:
+                prediction = 'classical'
+            elif prediction == 1:
+                prediction = 'metal'
+            else:
+                prediction = 'country'
+
+            json = {'answer': 'Genre',
+                'answers': ['Genre'],
+                'scores': [prediction],
+                'time': time() - start}
+            print(json)
+            return jsonify(json)
+
+
         else:
             return jsonify({'error': 'Unknown Question. Try asking a different question.'})
     else:
