@@ -36,9 +36,9 @@ import pickle
 # VQA_CAFFEMODEL_PATH = "/x/daylen/saved_models/multi_att_2_glove/_iter_190000.caffemodel"
 # VDICT_PATH = "/x/daylen/saved_models/multi_att_2_glove/vdict.json"
 # ADICT_PATH = "/x/daylen/saved_models/multi_att_2_glove/adict.json"
-VQA_weights_file_name   = 'models/VQA/VQA_MODEL_WEIGHTS.hdf5'
+VQA_weights_file_name = 'models/VQA/VQA_MODEL_WEIGHTS.hdf5'
 label_encoder_file_name = 'models/VQA/FULL_labelencoder_trainval.pkl'
-CNN_weights_file_name   = 'models/CNN/vgg16_weights.h5'
+CNN_weights_file_name = 'models/CNN/vgg16_weights.h5'
 
 ALLOWED_EXTENSIONS = set(['jpg', 'jpeg', 'JPG', 'JPEG', 'png', 'PNG'])
 MUSIC_EXTENSIONS = set(['wav'])
@@ -55,9 +55,11 @@ feature_cache = {}
 image_features = None
 last_file_type = None
 # vqa_data_provider = LoadVQADataProvider(VDICT_PATH, ADICT_PATH, batchsize=1, \
-    # mode='test', data_shape=EXTRACT_LAYER_SIZE)
+# mode='test', data_shape=EXTRACT_LAYER_SIZE)
 
 # helpers
+
+
 def setup():
     # global resnet_mean
     # global resnet_net
@@ -88,16 +90,18 @@ def setup():
     # if not os.path.exists(VIZ_FOLDER):
     #     os.makedirs(VIZ_FOLDER)
 
-    print ('Finished setup')
+    print('Finished setup')
+
 
 def trim_image(img):
-    y,x,c = img.shape
+    y, x, c = img.shape
     if c != 3:
         raise Exception('Expected 3 channels in the image')
-    resized_img = cv2.resize( img, (TARGET_IMG_SIZE, TARGET_IMG_SIZE))
-    transposed_img = np.transpose(resized_img,(2,0,1)).astype(np.float32)
+    resized_img = cv2.resize(img, (TARGET_IMG_SIZE, TARGET_IMG_SIZE))
+    transposed_img = np.transpose(resized_img, (2, 0, 1)).astype(np.float32)
     ivec = transposed_img - resnet_mean
     return ivec
+
 
 def make_rev_adict(adict):
     """
@@ -105,25 +109,30 @@ def make_rev_adict(adict):
     indices to text answers.
     """
     rev_adict = {}
-    for k,v in adict.items():
+    for k, v in adict.items():
         rev_adict[v] = k
     return rev_adict
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
 
+
 def allowed_music_format(filename):
     return '.' in filename and filename.rsplit('.', 1)[1] in MUSIC_EXTENSIONS
+
 
 def softmax(arr):
     e = np.exp(arr)
     dist = e / np.sum(e)
     return dist
 
+
 def downsample_image(img):
     img_h, img_w, img_c = img.shape
     img = resize(img, (448 * img_h / img_w, 448))
     return img
+
 
 def get_image_model(CNN_weights_file_name):
     ''' Takes the CNN weights file, and returns the VGG model update
@@ -138,6 +147,7 @@ def get_image_model(CNN_weights_file_name):
     image_model.compile(optimizer=sgd, loss='categorical_crossentropy')
     return image_model
 
+
 def get_image_features(image_file_name, CNN_weights_file_name):
     ''' Runs the given image_file to VGG 16 model and returns the
     weights (filters) as a 1, 4096 dimension vector '''
@@ -148,7 +158,6 @@ def get_image_features(image_file_name, CNN_weights_file_name):
     # is required to go through the same transformation
     im = cv2.resize(cv2.imread(image_file_name), (224, 224))
 
-
     # The mean pixel values are taken from the VGG authors, which are the values computed from the training dataset.
     mean_pixel = [103.939, 116.779, 123.68]
 
@@ -156,15 +165,15 @@ def get_image_features(image_file_name, CNN_weights_file_name):
     for c in range(3):
         im[:, :, c] = im[:, :, c] - mean_pixel[c]
 
-    im = im.transpose((2,0,1)) # convert the image to RGBA
-
+    im = im.transpose((2, 0, 1))  # convert the image to RGBA
 
     # this axis dimension is required becuase VGG was trained on a dimension
     # of 1, 3, 224, 224 (first axis is for the batch size
     # even though we are using only one image, we have to keep the dimensions consistent
     im = np.expand_dims(im, axis=0)
 
-    image_features[0,:] = get_image_model(CNN_weights_file_name).predict(im)[0]
+    image_features[0, :] = get_image_model(
+        CNN_weights_file_name).predict(im)[0]
     return image_features
 
 
@@ -187,7 +196,7 @@ def get_question_features(question):
     tokens = word_embeddings(question)
     question_tensor = np.zeros((1, 30, 300))
     for j in range(len(tokens)):
-            question_tensor[0,j,:] = tokens[j].vector
+        question_tensor[0, j, :] = tokens[j].vector
     return question_tensor
 
 # def save_attention_visualization(source_img_path, att_map, dest_name):
@@ -218,10 +227,13 @@ def get_question_features(question):
 #     return path0
 
 # routes
+
+
 @app.route('/', methods=['GET'])
 def index():
     print('here')
     return app.send_static_file('index.html')
+
 
 @app.route('/api/upload_image', methods=['POST'])
 def upload_image():
@@ -236,7 +248,8 @@ def upload_image():
         if file_hash in feature_cache:
             json = {'img_id': file_hash, 'time': time() - start}
             return jsonify(json)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], file_hash + '.jpg')
+        save_path = os.path.join(
+            app.config['UPLOAD_FOLDER'], file_hash + '.jpg')
         file.seek(0)
         file.save(save_path)
         # if img is None:
@@ -252,18 +265,20 @@ def upload_image():
         if file_hash in feature_cache:
             json = json = {'img_id': file_hash, 'time': time() - start}
             return jsonify(json)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], file_hash + '.wav')
+        save_path = os.path.join(
+            app.config['UPLOAD_FOLDER'], file_hash + '.wav')
         file.seek(0)
         file.save(save_path)
 
         y, sr = librosa.load(save_path)
         onset_env = librosa.onset.onset_strength(y, sr=sr)
         tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
-        feature_cache[file_hash] = {'tempo':tempo}
+        feature_cache[file_hash] = {'tempo': tempo}
         json = {'img_id': file_hash, 'time': time() - start}
         return jsonify(json)
     else:
         return jsonify({'error': 'Please upload a JPG or PNG.'})
+
 
 @app.route('/api/upload_question', methods=['POST'])
 def upload_question():
@@ -283,17 +298,16 @@ def upload_question():
         top_answers = []
         top_scores = []
         labelencoder = joblib.load(label_encoder_file_name)
-        for label in reversed(y_sort_index[0,-5:]):
-            output = str(round(y_output[0,label]*100,2)).zfill(5), "% ", labelencoder.inverse_transform(label)
+        for label in reversed(y_sort_index[0, -5:]):
+            output = str(round(
+                y_output[0, label] * 100, 2)).zfill(5), "% ", labelencoder.inverse_transform(label)
             top_answers.append(output[2])
             top_scores.append(float(output[0]) / 100)
 
-
-
         json = {'answer': top_answers[0],
-            'answers': top_answers,
-            'scores': top_scores,
-            'time': time() - start}
+                'answers': top_answers,
+                'scores': top_scores,
+                'time': time() - start}
         print(json)
         return jsonify(json)
     elif last_file_type == 'music':
@@ -308,32 +322,34 @@ def upload_question():
             tempo = music_feature['tempo'][0]
             print(type(tempo))
             json = {'answer': 'Tempo',
-                'answers': ['Tempo'],
-                'scores': [tempo],
-                'time': time() - start}
+                    'answers': ['Tempo'],
+                    'scores': [tempo],
+                    'time': time() - start}
             print(json)
             return jsonify(json)
         elif 'genre' in question:
-            model = pickle.load(open('finalized_model_lda.sav', 'rb'))
-            save_path = os.path.join(app.config['UPLOAD_FOLDER'], music_hash + '.wav')
-            sample_rate, X = scipy.io.wavfile.read(save_path)
-            mfcc_features = mfcc(X, sample_rate)
-            X = mfcc_features.flatten()[:30000]
-            prediction = model.predict(X)[0]
-            if prediction == 0:
-                prediction = 'classical'
-            elif prediction == 1:
-                prediction = 'metal'
-            else:
-                prediction = 'country'
+            n_mfcc = 12
+            directories = ['classical', 'country', 'disco', 'metal', 'pop']
+            model = pickle.load(open('finalized_model_svc_5.sav', 'rb'))
+            scaler = pickle.load(open('svc_scaler_5.sav', 'rb'))
+            save_path = os.path.join(
+                app.config['UPLOAD_FOLDER'], music_hash + '.wav')
+            X, sample_rate = librosa.load(save_path)
+            mfcc_features = librosa.feature.mfcc(
+                X, sr=sample_rate, n_mfcc=n_mfcc).T
+            mfcc_scaled = scaler.transform(mfcc_features)
+            predicted_labels = model.predict(
+                mfcc_scaled[int(len(mfcc_scaled) * .1):int(len(mfcc_scaled) * .9)])
+            prediction = np.argmax([(predicted_labels == c).sum()
+                                    for c in range(len(directories))])
+            prediction = directories[prediction]
 
             json = {'answer': 'Genre',
-                'answers': ['Genre'],
-                'scores': [prediction],
-                'time': time() - start}
+                    'answers': ['Genre'],
+                    'scores': [prediction],
+                    'time': time() - start}
             print(json)
             return jsonify(json)
-
 
         else:
             return jsonify({'error': 'Unknown Question. Try asking a different question.'})
@@ -342,6 +358,7 @@ def upload_question():
 # @app.route('/viz/<filename>')
 # def get_visualization(filename):
 #     return send_from_directory(VIZ_FOLDER, filename)
+
 
 if __name__ == '__main__':
     setup()
