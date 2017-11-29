@@ -164,7 +164,7 @@
 			addRemoveLinks: true,
 			uploadMultiple: false,
 			dictRemoveFile: "Clear",
-			dictDefaultMessage: "Drop image here",
+			dictDefaultMessage: "Drop image or music file here",
 			thumbnailWidth: null,
 			thumbnailHeight: 200,
 			maxThumbnailFilesize: 20
@@ -185,7 +185,11 @@
 		function displayAnswers(answers, scores, viz, time) {
 			strings = []
 			for (var i = 0; i < answers.length; i++) {
-				strings.push('<p>' + answers[i] + ' (' + scores[i].toFixed(2) + ')</p>')
+				if (typeof scores[i] === 'string') {
+					strings.push('<p>' + answers[i] + ' (' + scores[i] + ')</p>')
+				} else {
+					strings.push('<p>' + answers[i] + ' (' + scores[i].toFixed(2) + ')</p>')
+				}
 			}
 			$('#answer').html(strings.join(' '));
 			$('#viz').html('<img src="/' + viz[0] + '" />');
