@@ -123,6 +123,9 @@
 		<div id="viz">
 
 		</div>
+
+
+
 		<div id="status">
 
 		</div>
@@ -178,11 +181,11 @@
 					clearResponse();
 					alert(response.error);
 				} else {
-					displayAnswers(response.answers, response.scores, response.viz, response.time);
+					displayAnswers(response.answers, response.scores, response.viz, response.time, response.music);
 				}
 			})
 		}
-		function displayAnswers(answers, scores, viz, time) {
+		function displayAnswers(answers, scores, viz, time, music) {
 			strings = []
 			for (var i = 0; i < answers.length; i++) {
 				if (typeof scores[i] === 'string') {
@@ -191,9 +194,18 @@
 					strings.push('<p>' + answers[i] + ' (' + scores[i].toFixed(2) + ')</p>')
 				}
 			}
+		    console.log(music);
+			if (true) {
+		        console.log('pushing')
+		 console.log("<audio controls> <source src='" + music + "' type='audio/mp3'> </audio>")
+		 strings.push("<audio controls> <source src='" + music + "' type='audio/mp3'> </audio>");
+		    }
+
 			$('#answer').html(strings.join(' '));
 			$('#viz').html('<img src="/' + viz[0] + '" />');
 			$('#status').text('Took ' + time.toFixed(3) + ' sec');
+
+
 		}
 		$('#question').keypress(function(e) {
 			if (e.which == 13) {

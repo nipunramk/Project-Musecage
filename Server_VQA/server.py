@@ -264,14 +264,15 @@ def upload_image():
         feature_cache[file_hash] = {'tempo':tempo}
         json = {'img_id': file_hash, 'time': time() - start}
 
-        trans(save_path)
+        trans(save_path, file_hash)
 
         return jsonify(json)
     else:
         return jsonify({'error': 'Please upload a JPG or PNG.'})
 
+from pydub import AudioSegment
 
-def trans(filename):
+def trans(filename, fh):
 
     x, sr = librosa.load(filename)
 
@@ -280,11 +281,11 @@ def trans(filename):
                                                units='samples',
                                                hop_length=100,
                                                backtrack=False,
-                                               pre_max=5,
-                                               post_max=5,
-                                               pre_avg=50,
-                                               post_avg=50,
-                                               delta=0.0001,
+                                               pre_max=20,
+                                               post_max=20,
+                                               pre_avg=100,
+                                               post_avg=100,
+                                               delta=0.2,
                                                wait=0)
     onset_boundaries = numpy.concatenate([[0], onset_samples, [len(x)]])
     onset_times = librosa.samples_to_time(onset_boundaries, sr=sr)
@@ -294,10 +295,16 @@ def trans(filename):
     for i in range(len(onset_boundaries)-1)
 	])
 	
-    librosa.output.write_wav('test.wav', y, sr)
-	
-    print("DONE")
+    librosa.output.write_wav(fh + '-out.wav', y, sr, True)
+    wav_audio = AudioSegment.from_file(fh + "-out.wav", format="wav")
+    wav_audio.export( "static/" + fh + ".mp3", format="mp3")
 
+    global fname
+    fname = fh + ".mp3"
+
+    print("DONE")
+    
+fname = ""
 def estimate_pitch(segment, sr, fmin=50.0, fmax=2000.0):
     
     # Compute autocorrelation of input segment.
@@ -393,6 +400,17 @@ def upload_question():
                 'time': time() - start}
             print(json)
             return jsonify(json)
+        elif 'transcribe' in question:
+
+            save_path = os.path.join("", fname)
+            json = {'answer': 'Transcription',
+                    'answers': ['Transcription', 'other'],
+                    'scores': [100, 200],
+                    'time': 0,
+                    'music': save_path
+            }
+            print(fname)
+            return jsonify(json)
 
         else:
             return jsonify({'error': 'Unknown Question. Try asking a different question.'})
@@ -404,4 +422,4 @@ def upload_question():
 
 if __name__ == '__main__':
     setup()
-    app.run()
+    app.run(debug=True)
