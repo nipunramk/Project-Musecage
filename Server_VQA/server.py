@@ -28,15 +28,10 @@ import math
 ###################################
 ####### FINGERPRINTING CODE #######
 ###################################
-#replace with the name of the input file
-#original_wav = "furelise.wav"
-#update with more songs
-songs_wav = [song for song in os.listdir("songs") if song[-3:] == "wav"]
-
-
-#original, sample_rate = librosa.load("songs/" + original_wav)
-sample_rate =librosa.load("songs/furelise.wav")[1]
-song_data = [librosa.load("songs/" + song)[0] for song in songs_wav]
+ranges = [40, 80, 120, 180, 300]
+fft_frame_size = 2000
+input_length = 0
+song_info = {"minutewaltz": "Minute Waltz in D flat major - Chopin", "fantaisieimpromptu": "Fantaisie Impromptu - Chopin", "furelise": "Fur Elise - Chopin", "grandevalse": "Grande Valse Brillante - Chopin", "moonlight": "Moonlight Sonata - Beethoven", "rondoallaturca": "Rondo Alla Turca - Mozart", "prelude": "Prelude in C Major - Bach", "schubertimpromptu": "Impromptu - Schubert"}
 
 def remove_zeros(vec):
     temp = np.transpose(vec == 0)
@@ -46,16 +41,6 @@ def remove_zeros(vec):
 def get_fft_chunks(time_data):
     num_samples= len(time_data)//fft_frame_size
     return [np.fft.fft(time_data[i*fft_frame_size:(i+1)*fft_frame_size]) for i in range(num_samples)]
-
-songs = [remove_zeros(s) for s in song_data] #remove the non-information
-
-#parameter we can play with
-fft_frame_size = 2000
-freq = np.fft.fftfreq(fft_frame_size)
-fft_freqs = [abs(freq[i]*sample_rate) for i in range(fft_frame_size)]
-
-ranges = [40, 80, 120, 180, 300]
-
 
 def get_magnitudes(fft):
     #return high_mags, a 2d array
@@ -97,22 +82,6 @@ def populate_database(mags, database, song_name):
             database[key][song_name] = []
         database[key][song_name].append(i)
 
-
-
-"""#process original/input song 
-original_fingerprint = {}
-original_fft = get_fft_chunks(original)
-mags = get_magnitudes(original_fft)
-populate_database(mags, original_fingerprint, original_wav)"""
-
-"""#initialize dictionary (song->similarity)
-similarities = {key[:-4]:0 for key in songs_wav}
-#for each set of 5 notes in the original/input song, check if in other songs
-for key in original_fingerprint.keys():
-    if key in database:
-        for song_name in database[key]:
-            similarities[song_name] += len(database[key][song_name]) * len(original_fingerprint[key])
-"""
 def knn(k, sim_dict):
     sorted_dict = sorted(sim_dict, key=sim_dict.get, reverse=True)[:k]
     counts = {}
@@ -122,6 +91,22 @@ def knn(k, sim_dict):
             counts[name] = 0
         counts[name] += 1
     return max(counts, key=counts.get)
+
+songs_wav = [song for song in os.listdir("songs") if song[-3:] == "wav"]
+
+with open('song_data.pickle', 'rb') as handle:
+    database = pickle.load(handle)
+with open('song_lengths.pickle', 'rb') as handle:
+    song_lengths = pickle.load(handle)
+
+
+sample_rate =librosa.load("songs/furelise1.wav")[1]
+
+#parameter we can play with
+freq = np.fft.fftfreq(fft_frame_size)
+fft_freqs = [abs(freq[i]*sample_rate) for i in range(fft_frame_size)]
+
+
 
 #############################
 ####END OF FINGERPRINTING####
@@ -456,32 +441,30 @@ def upload_question():
         elif "cover" in question or "name" in question:
             save_path = os.path.join(
                 app.config['UPLOAD_FOLDER'], music_hash + '.wav')
-            song_wav = librosa.load(save_path)[0]
+            input_song = librosa.load(save_path)[0]
 
             #input song
             fingerprint = {}
-            fft = get_fft_chunks(song_wav)
+            input_song = remove_zeros(input_song)
+            fft = get_fft_chunks(input_song)
+            input_length = len(input_song)//fft_frame_size
+            print("input_length", input_length)
             mags = get_magnitudes(fft)
             populate_database(mags, fingerprint, save_path)
-
-            database = {}
-            #songs[0] is the original/input, we want to process it separately
-            for index, song in enumerate(songs):
-                #print("adding song ", songs_wav[index][:-4], "...")
-                original_fft = get_fft_chunks(song)
-                mags = get_magnitudes(original_fft)
-                populate_database(mags, database, songs_wav[index][:-4])
 
             similarities = {key[:-4]:0 for key in songs_wav}
             #for each set of 5 notes in the original/input song, check if in other songs
             for key in fingerprint.keys():
                 if key in database:
                     for song_name in database[key]:
-                        similarities[song_name] += len(database[key][song_name]) * len(fingerprint[key])
+                        db = database[key][song_name]
+                        og = fingerprint[key][save_path]
+                        similarities[song_name] += len(db)/song_lengths[song_name] * len(og)/input_length
+
             out = knn(3, similarities)
             json = {'answer': 'Song',
                     'answers': ['Song'],
-                    'scores': [out],
+                    'scores': [song_info[out]],
                     'time': time() - start}
             print(json)
             return jsonify(json)
