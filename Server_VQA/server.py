@@ -468,6 +468,86 @@ def upload_question():
                     'time': time() - start}
             print(json)
             return jsonify(json)
+        elif "similar" in question:
+            FACT = 450
+
+            def G1(mfcc1, mfcc2):
+                npmfcc1 = np.transpose(np.array(mfcc1))
+                m1 = np.mean(npmfcc1, axis=1)
+                co1 = np.cov(npmfcc1)
+                ico1 = np.linalg.inv(co1)
+
+                npmfcc2 = np.transpose(np.array(mfcc2))
+                m2 = np.mean(npmfcc2, axis=1)
+                co2 = np.cov(npmfcc2)
+                ico2 = np.linalg.inv(co2)
+
+                pt1 = np.trace(np.dot(co1, ico2))
+                pt2 = np.trace(np.dot(co2, ico1))
+                pt3 = np.trace(
+                        np.outer(
+                            np.dot(
+                                (np.add(ico1, ico2)), 
+                                (np.subtract(m1, m2))
+                            ), 
+                            np.subtract(m1, m2)
+                        )
+                    )
+
+                d = pt1 + pt2 + pt3
+                df = -np.exp(-1/FACT*d)
+                return df
+
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/congratulations.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            cn = mfcc_features
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/rockstar.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            rs = mfcc_features
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/pt2.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            pt2 = mfcc_features
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/havana.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            hav = mfcc_features
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/sameoldlove.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            sol = mfcc_features
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/chopin.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            chop = mfcc_features
+            sample_rate, X = scipy.io.wavfile.read("musicsamples/beethoven.wav")
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            beet = mfcc_features
+
+            songs = [cn, rs, pt2, hav, sol, chop, beet]
+            songnames = ["Post Malone - Congratulations", "Post Malone - Rockstar", "Kanye West - Pt. 2", "Camila Cabello - Havana", "Selena Gomez - Same Old Love", "Chopin - Etude Op 10 No.4", "Beethoven - Moonlight Sonata"]
+            def getSimilars(compareSong):
+                results = []
+                for song in songs:
+                    length = min(len(cn), len(cn))
+                    res = G1(compareSong[len(compareSong)//2-length//2:len(compareSong)//2+length//2],
+                             song[len(song)//2-length//2:len(song)//2+length//2])
+                    results += [res]
+                    print(res)
+                results = np.array(results)
+                top5 = [songnames[index] for index in results.argsort().tolist()][1:6]
+                top5vals = [-1*results[index] for index in results.argsort().tolist()][1:6]
+                return(top5, top5vals)
+
+            save_path = os.path.join(
+                app.config['UPLOAD_FOLDER'], music_hash + '.wav')
+            sample_rate, X = scipy.io.wavfile.read(save_path)
+            mfcc_features = mfcc(X, samplerate=sample_rate, numcep=20, nfilt=36)
+            compareSong = mfcc_features
+            names, vals = getSimilars(compareSong)
+
+            json = {'answer': names[0],
+                'answers': names,
+                'scores': vals,
+                'time': time() - start}
+            print(json)
+            return jsonify(json)
 
         else:
             return jsonify({'error': 'Unknown Question. Try asking a different question.'})
