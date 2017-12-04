@@ -363,78 +363,9 @@ def upload_image():
         tempo = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)
         feature_cache[file_hash] = {'tempo': tempo}
         json = {'img_id': file_hash, 'time': time() - start}
-
-        trans(save_path, file_hash)
-
         return jsonify(json)
     else:
         return jsonify({'error': 'Please upload a JPG or PNG.'})
-
-
-
-from pydub import AudioSegment
-
-def trans(filename, fh):
-
-    x, sr = librosa.load(filename)
-
-    onset_samples = librosa.onset.onset_detect(x, 
-                                               sr=sr, 
-                                               units='samples',
-                                               hop_length=100,
-                                               backtrack=False,
-                                               pre_max=20,
-                                               post_max=20,
-                                               pre_avg=100,
-                                               post_avg=100,
-                                               delta=0.2,
-                                               wait=0)
-    onset_boundaries = numpy.concatenate([[0], onset_samples, [len(x)]])
-    onset_times = librosa.samples_to_time(onset_boundaries, sr=sr)
-
-    y = numpy.concatenate([
-    estimate_pitch_and_generate_sine(x, onset_boundaries, i, sr=sr)
-    for i in range(len(onset_boundaries)-1)
-	])
-	
-    librosa.output.write_wav(fh + '-out.wav', y, sr, True)
-    wav_audio = AudioSegment.from_file(fh + "-out.wav", format="wav")
-    wav_audio.export( "static/" + fh + ".mp3", format="mp3")
-
-    global fname
-    fname = fh + ".mp3"
-
-    print("DONE")
-    
-fname = ""
-def estimate_pitch(segment, sr, fmin=50.0, fmax=2000.0):
-    
-    # Compute autocorrelation of input segment.
-    r = librosa.autocorrelate(segment)
-    
-    # Define lower and upper limits for the autocorrelation argmax.
-    i_min = sr/fmax
-    i_max = sr/fmin
-    r[:int(i_min)] = 0
-    r[int(i_max):] = 0
-    
-    # Find the location of the maximum autocorrelation.
-    i = r.argmax()
-    f0 = float(sr)/i
-    return f0
-
-def generate_sine(f0, sr, n_duration):
-    n = numpy.arange(n_duration)
-    return 0.2*numpy.sin(2*numpy.pi*f0*n/float(sr))
-
-def estimate_pitch_and_generate_sine(x, onset_samples, i, sr):
-    n0 = onset_samples[i]
-    n1 = onset_samples[i+1]
-    f0 = estimate_pitch(x[n0:n1], sr)
-    return generate_sine(f0, sr, n1-n0)
-
-
-
 
 
 @app.route('/api/upload_question', methods=['POST'])
